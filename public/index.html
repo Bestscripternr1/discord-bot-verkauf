@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord Bot Verkauf - 15€</title>
+    <title>Discord Bot Bestellung - 15€</title>
     <style>
         * {
             margin: 0;
@@ -25,7 +25,7 @@
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
+            max-width: 700px;
             width: 100%;
             padding: 40px;
         }
@@ -129,11 +129,6 @@
             cursor: pointer;
             font-size: 0.9em;
             text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .logout-btn:hover {
-            background: #c53639;
         }
 
         .form-group {
@@ -148,7 +143,12 @@
             font-size: 0.95em;
         }
 
-        input[type="number"],
+        .optional {
+            color: #999;
+            font-weight: 400;
+            font-size: 0.85em;
+        }
+
         textarea {
             width: 100%;
             padding: 12px 15px;
@@ -157,42 +157,62 @@
             font-size: 1em;
             transition: all 0.3s;
             font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
         }
 
-        input[type="number"]:focus,
         textarea:focus {
             outline: none;
             border-color: #5865F2;
             box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1);
         }
 
-        textarea {
-            resize: vertical;
-            min-height: 120px;
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
         }
 
-        .checkbox-group {
+        .file-upload-input {
+            display: none;
+        }
+
+        .file-upload-label {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
+            justify-content: center;
             gap: 10px;
             padding: 15px;
             background: #f8f9fa;
+            border: 2px dashed #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #666;
+        }
+
+        .file-upload-label:hover {
+            border-color: #5865F2;
+            background: #f0f2ff;
+        }
+
+        .file-upload-label.has-file {
+            border-color: #4CAF50;
+            background: #f1f8f4;
+            color: #4CAF50;
+        }
+
+        .image-preview {
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+        }
+
+        .image-preview img {
+            max-width: 200px;
+            max-height: 200px;
             border-radius: 10px;
             border: 2px solid #e0e0e0;
-        }
-
-        input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-            font-weight: 400;
         }
 
         .submit-btn {
@@ -211,10 +231,6 @@
         .submit-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
-        }
-
-        .submit-btn:active {
-            transform: translateY(0);
         }
 
         .submit-btn:disabled {
@@ -306,46 +322,83 @@
                 <a href="/api/auth/logout" class="logout-btn">Abmelden</a>
             </div>
 
+            <h2 style="color: #333; margin-bottom: 20px;">📋 Kontaktformular</h2>
+
             <form id="botForm">
                 <div class="form-group">
-                    <label for="age">Alter <span class="required">*</span></label>
-                    <input type="number" id="age" placeholder="z.B. 18" min="13" max="99" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="botDescription">Bot-Beschreibung <span class="required">*</span></label>
-                    <textarea id="botDescription" placeholder="Was soll der Bot können?
+                    <label for="botFeatures">Was soll der Bot alles können? <span class="required">*</span></label>
+                    <textarea id="botFeatures" placeholder="Beschreibe die gewünschten Funktionen...
 
 Beispiele:
-- Moderation (kick, ban, mute)
-- Musik abspielen
-- Levelsystem
-- Tickets
+- Moderation (kick, ban, mute, warn)
+- Musik abspielen (YouTube, Spotify)
+- Levelsystem mit Rangrollen
+- Ticket-System
+- Willkommensnachrichten
 - etc." required></textarea>
                 </div>
 
                 <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="rulesAccept" required>
-                        <label for="rulesAccept">
-                            Ich bestätige, dass der Bot nicht gegen Discord-Regeln verstößt <span class="required">*</span>
+                    <label for="botLogo">
+                        Welches Logo soll der Bot haben? <span class="optional">(Optional)</span>
+                    </label>
+                    <div class="file-upload">
+                        <input type="file" id="botLogo" class="file-upload-input" accept="image/*">
+                        <label for="botLogo" class="file-upload-label" id="fileLabel">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <span id="fileName">Bild hochladen (JPG, PNG, GIF)</span>
                         </label>
+                    </div>
+                    <div class="image-preview" id="imagePreview">
+                        <img id="previewImg" src="" alt="Vorschau">
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="additionalMessage">Sonstige Nachricht <span class="optional">(Optional)</span></label>
+                    <textarea id="additionalMessage" placeholder="Weitere Wünsche, Fragen oder Anmerkungen..." style="min-height: 80px;"></textarea>
+                </div>
+
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    Jetzt bestellen - 15€
+                    Absenden - 15€
                 </button>
             </form>
 
             <div class="success-message" id="successMessage">
-                ✅ Bestellung erfolgreich!<br>
+                ✅ Bestellung erfolgreich versendet!<br>
                 Du wirst bald kontaktiert.
             </div>
         </div>
     </div>
 
     <script>
+        let selectedFile = null;
+
+        // File Upload Handler
+        document.getElementById('botLogo').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const label = document.getElementById('fileLabel');
+                const fileName = document.getElementById('fileName');
+                
+                label.classList.add('has-file');
+                fileName.textContent = '✓ ' + file.name;
+
+                // Vorschau anzeigen
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
         async function checkAuth() {
             try {
                 const response = await fetch('/api/auth/user');
@@ -382,19 +435,35 @@ Beispiele:
 
         document.getElementById('botForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
+            const botFeatures = document.getElementById('botFeatures').value;
+            if (!botFeatures.trim()) {
+                showError('Bitte beschreibe was der Bot können soll!');
+                return;
+            }
+
             const submitBtn = document.getElementById('submitBtn');
             const originalText = submitBtn.innerHTML;
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="loading"></span> Sende...';
 
             try {
+                let logoBase64 = null;
+                if (selectedFile) {
+                    logoBase64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(selectedFile);
+                    });
+                }
+
                 const response = await fetch('/api/order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        age: document.getElementById('age').value,
-                        botDescription: document.getElementById('botDescription').value,
-                        rulesAccepted: document.getElementById('rulesAccept').checked
+                        botFeatures: botFeatures,
+                        botLogo: logoBase64,
+                        additionalMessage: document.getElementById('additionalMessage').value
                     })
                 });
 
@@ -403,10 +472,15 @@ Beispiele:
                 if (response.ok) {
                     document.getElementById('botForm').style.display = 'none';
                     document.getElementById('successMessage').style.display = 'block';
+                    
                     setTimeout(() => {
                         document.getElementById('botForm').reset();
                         document.getElementById('botForm').style.display = 'block';
                         document.getElementById('successMessage').style.display = 'none';
+                        document.getElementById('imagePreview').style.display = 'none';
+                        document.getElementById('fileLabel').classList.remove('has-file');
+                        document.getElementById('fileName').textContent = 'Bild hochladen (JPG, PNG, GIF)';
+                        selectedFile = null;
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = originalText;
                     }, 5000);
