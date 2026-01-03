@@ -44,6 +44,71 @@ app.get('/api/auth/login', (req, res) => {
 app.get('/api/auth/callback', async (req, res) => {
   const code = req.query.code;
   
+  console.log('📥 Callback received, code:', code ? 'YES' : 'NO');
+  
+  if (!code) {
+    console.log('❌ No code received');
+    return res.redirect('/?error=no_code');
+  }
+
+  try {
+    console.log('🔄 Fetching token from Discord...');
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: process.env.DISCORD_REDIRECT_URI
+      })
+    });
+
+    const tokenData = await tokenResponse.json();
+    console.log('🎫 Token response:', tokenData.access_token ? 'SUCCESS' : 'FAILED');
+
+    if (!tokenData.access_token) {
+      console.log('❌ No access token:', tokenData);
+      return res.redirect('/?error=no_token');
+    }
+
+    console.log('👤 Fetching user data...');
+    const userResponse = await fetch('https://discord.com/api/users/@me', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`
+      }
+    });
+
+    const userData = await userResponse.json();
+    console.log('✅ User data received:', userData.username);
+
+    req.session.user = {
+      id: userData.id,
+      username: userData.username,
+      discriminator: userData.discriminator || '0',
+      avatar: userData.avatar ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png',
+      email: userData.email
+    };
+
+    console.log('💾 Session saved:', req.session.user.username);
+    
+    req.session.save((err) => {
+      if (err) {
+        console.log('❌ Session save error:', err);
+      }
+      console.log('🔄 Redirecting to homepage...');
+      res.redirect('/?login=success');
+    });
+
+  } catch (error) {
+    console.error('❌ Auth Error:', error);
+    res.redirect('/?error=auth_failed');
+  }
+});
+  
   if (!code) {
     return res.redirect('/?error=no_code');
   }
