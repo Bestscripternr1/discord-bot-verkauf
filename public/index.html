@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord Bot Bestellung - 15€</title>
+    <title>Discord Bot Bestellung</title>
     <style>
         * {
             margin: 0;
@@ -55,6 +55,21 @@
             font-size: 1.5em;
             font-weight: bold;
             margin: 20px 0;
+        }
+
+        .payment-info {
+            background: rgba(88, 101, 242, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border: 2px solid rgba(88, 101, 242, 0.3);
+        }
+
+        .payment-info p {
+            color: #5865F2;
+            margin: 0;
+            font-size: 1em;
+            font-weight: 600;
         }
 
         .login-section {
@@ -297,7 +312,10 @@
         <div class="header">
             <h1>🤖 Discord Bots</h1>
             <p>Bestelle deinen individuellen Bot</p>
-            <div class="price-tag">15€ pro Bot</div>
+            <div class="price-tag">15€ oder weniger</div>
+            <div class="payment-info">
+                <p>💳 Zahlung per PayPal oder Überweisung</p>
+            </div>
         </div>
 
         <div id="errorMessage" class="error-message"></div>
@@ -364,7 +382,7 @@ Beispiele:
                 </div>
 
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    Absenden - 15€
+                    Absenden
                 </button>
             </form>
 
@@ -378,7 +396,6 @@ Beispiele:
     <script>
         let selectedFile = null;
 
-        // File Upload Handler
         document.getElementById('botLogo').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -389,7 +406,6 @@ Beispiele:
                 label.classList.add('has-file');
                 fileName.textContent = '✓ ' + file.name;
 
-                // Vorschau anzeigen
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     document.getElementById('previewImg').src = e.target.result;
