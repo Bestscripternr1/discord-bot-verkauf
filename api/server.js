@@ -5,7 +5,7 @@ const nodemailer = require('nodemailer');
 const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
 app.use(session({
@@ -110,10 +110,10 @@ app.post('/api/order', async (req, res) => {
     return res.status(401).json({ error: 'Nicht eingeloggt' });
   }
 
-  const { age, botDescription, rulesAccepted } = req.body;
+  const { botFeatures, botLogo, additionalMessage } = req.body;
 
-  if (!age || !botDescription || !rulesAccepted) {
-    return res.status(400).json({ error: 'Alle Felder erforderlich' });
+  if (!botFeatures || !botFeatures.trim()) {
+    return res.status(400).json({ error: 'Bot-Features erforderlich' });
   }
 
   const user = req.session.user;
@@ -121,12 +121,26 @@ app.post('/api/order', async (req, res) => {
     discordUsername: `${user.username}#${user.discriminator}`,
     discordId: user.id,
     email: user.email || 'Keine Email',
-    age: age,
-    botDescription: botDescription,
+    botFeatures: botFeatures,
+    additionalMessage: additionalMessage || 'Keine',
+    hasLogo: !!botLogo,
     timestamp: new Date().toISOString()
   };
 
   try {
+    const attachments = [];
+    
+    if (botLogo) {
+      const base64Data = botLogo.split(',')[1];
+      const extension = botLogo.split(';')[0].split('/')[1];
+      
+      attachments.push({
+        filename: `bot-logo.${extension}`,
+        content: base64Data,
+        encoding: 'base64'
+      });
+    }
+
     const mailOptions = {
       from: CONFIG.EMAIL_USER,
       to: CONFIG.EMAIL_TO,
@@ -136,21 +150,91 @@ app.post('/api/order', async (req, res) => {
         <html>
         <head>
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .header { background: linear-gradient(135deg, #5865F2, #7289DA); color: white; padding: 30px; text-align: center; border-radius: 10px; }
-            .content { background: #f9f9f9; padding: 30px; margin-top: 20px; border-radius: 10px; }
-            .info-box { background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #5865F2; border-radius: 5px; }
-            .bot-description { background: white; padding: 20px; margin: 15px 0; border-radius: 5px; border: 2px solid #e0e0e0; white-space: pre-wrap; }
-            .price { background: #4CAF50; color: white; padding: 15px; text-align: center; font-size: 1.3em; font-weight: bold; border-radius: 5px; margin: 20px 0; }
+            body { 
+              font-family: Arial, sans-serif; 
+              line-height: 1.6; 
+              color: #333; 
+              max-width: 700px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header { 
+              background: linear-gradient(135deg, #5865F2, #7289DA); 
+              color: white; 
+              padding: 30px; 
+              text-align: center; 
+              border-radius: 10px;
+              margin-bottom: 20px;
+            }
+            .content { 
+              background: #f9f9f9; 
+              padding: 30px; 
+              border-radius: 10px; 
+            }
+            .info-box { 
+              background: white; 
+              padding: 15px; 
+              margin: 10px 0; 
+              border-left: 4px solid #5865F2; 
+              border-radius: 5px; 
+            }
+            .info-box strong {
+              display: inline-block;
+              min-width: 120px;
+            }
+            .features-box { 
+              background: white; 
+              padding: 20px; 
+              margin: 15px 0; 
+              border-radius: 5px; 
+              border: 2px solid #5865F2;
+            }
+            .features-box h3 {
+              color: #5865F2;
+              margin-top: 0;
+            }
+            .features-content {
+              white-space: pre-wrap;
+              font-family: 'Courier New', monospace;
+              background: #f5f5f5;
+              padding: 15px;
+              border-radius: 5px;
+              margin-top: 10px;
+            }
+            .price { 
+              background: #4CAF50; 
+              color: white; 
+              padding: 15px; 
+              text-align: center; 
+              font-size: 1.3em; 
+              font-weight: bold; 
+              border-radius: 5px; 
+              margin: 20px 0; 
+            }
+            .logo-info {
+              background: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 15px 0;
+              border-radius: 5px;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 2px solid #e0e0e0;
+              color: #666;
+            }
           </style>
         </head>
         <body>
           <div class="header">
             <h1>🤖 Neue Bot-Bestellung!</h1>
+            <p>Ein Kunde möchte einen Discord Bot bestellen</p>
           </div>
           
           <div class="content">
-            <h2>👤 Kundendaten:</h2>
+            <h2 style="color: #5865F2;">👤 Kundendaten</h2>
             
             <div class="info-box">
               <strong>Discord:</strong> ${orderData.discordUsername}
@@ -165,28 +249,55 @@ app.post('/api/order', async (req, res) => {
             </div>
             
             <div class="info-box">
-              <strong>Alter:</strong> ${orderData.age} Jahre
+              <strong>Zeitpunkt:</strong> ${new Date(orderData.timestamp).toLocaleString('de-DE', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
             </div>
-            
-            <h2>📝 Bot-Beschreibung:</h2>
-            <div class="bot-description">${orderData.botDescription}</div>
+
+            <div class="features-box">
+              <h3>📋 Was soll der Bot können?</h3>
+              <div class="features-content">${orderData.botFeatures}</div>
+            </div>
+
+            ${orderData.additionalMessage !== 'Keine' ? `
+            <div class="features-box">
+              <h3>💬 Sonstige Nachricht</h3>
+              <div class="features-content">${orderData.additionalMessage}</div>
+            </div>
+            ` : ''}
+
+            ${orderData.hasLogo ? `
+            <div class="logo-info">
+              <strong>🎨 Bot-Logo:</strong> Im Anhang dieser Email!
+            </div>
+            ` : `
+            <div class="info-box">
+              <strong>🎨 Bot-Logo:</strong> Kein Logo hochgeladen
+            </div>
+            `}
             
             <div class="price">💰 Preis: 15€</div>
-            
-            <div class="info-box">
-              <strong>⏰ Zeitpunkt:</strong> ${new Date(orderData.timestamp).toLocaleString('de-DE')}
-            </div>
-            
-            <p style="background: #e3f2fd; padding: 15px; border-radius: 5px;">
-              ✅ Kunde hat Discord-Regeln bestätigt
-            </p>
+          </div>
+
+          <div class="footer">
+            <p><strong>Discord Bot Verkauf</strong></p>
+            <p style="font-size: 0.9em; color: #999;">Automatisch generierte Bestellung</p>
           </div>
         </body>
         </html>
-      `
+      `,
+      attachments: attachments
     };
 
     await transporter.sendMail(mailOptions);
+    
+    console.log('✅ Bestellung von:', orderData.discordUsername);
+    console.log('📧 Email gesendet mit', orderData.hasLogo ? 'Logo' : 'ohne Logo');
     
     res.json({ 
       success: true, 
@@ -194,7 +305,7 @@ app.post('/api/order', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Email Error:', error);
+    console.error('❌ Email Error:', error);
     res.status(500).json({ 
       error: 'Fehler beim Senden' 
     });
@@ -206,6 +317,6 @@ module.exports = app;
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`Server läuft auf Port ${PORT}`);
+    console.log(`🚀 Server läuft auf Port ${PORT}`);
   });
 }
