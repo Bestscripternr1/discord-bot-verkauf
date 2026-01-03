@@ -11,9 +11,10 @@ app.use(cors());
 app.use(session({
   secret: process.env.SESSION_SECRET || 'geheimer-schlüssel-2025',
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
