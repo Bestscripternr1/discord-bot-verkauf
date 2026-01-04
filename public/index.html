@@ -1,362 +1,560 @@
-const express = require('express');
-const session = require('express-session');
-const fetch = require('node-fetch');
-const nodemailer = require('nodemailer');
-const cors = require('cors');
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Bot Bestellung</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-const app = express();
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
 
-// Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
 
-// Session Configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'super-geheim-2025',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax'
-  }
-}));
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
 
-// Configuration
-const CONFIG = {
-  DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID,
-  DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET,
-  DISCORD_REDIRECT_URI: process.env.DISCORD_REDIRECT_URI,
-  EMAIL_USER: process.env.EMAIL_USER,
-  EMAIL_PASS: process.env.EMAIL_PASS,
-  EMAIL_TO: process.env.EMAIL_TO
-};
+        .header h1 {
+            color: #5865F2;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
 
-// Email Transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: CONFIG.EMAIL_USER,
-    pass: CONFIG.EMAIL_PASS
-  }
-});
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
 
-// ========== ROUTES ==========
+        .price-tag {
+            background: linear-gradient(135deg, #5865F2, #7289DA);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            display: inline-block;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
 
-// Discord Login
-app.get('/api/auth/login', (req, res) => {
-  const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CONFIG.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(CONFIG.DISCORD_REDIRECT_URI)}&response_type=code&scope=identify%20email`;
-  res.redirect(discordAuthUrl);
-});
+        .payment-info {
+            background: rgba(88, 101, 242, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border: 2px solid rgba(88, 101, 242, 0.3);
+        }
 
-// Discord Callback
-app.get('/api/auth/callback', async (req, res) => {
-  const code = req.query.code;
-  
-  if (!code) {
-    console.log('❌ No authorization code received');
-    return res.redirect('/?error=no_code');
-  }
+        .payment-info p {
+            color: #5865F2;
+            margin: 0;
+            font-size: 1em;
+            font-weight: 600;
+        }
 
-  try {
-    // Get access token
-    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        client_id: CONFIG.DISCORD_CLIENT_ID,
-        client_secret: CONFIG.DISCORD_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: CONFIG.DISCORD_REDIRECT_URI
-      })
-    });
+        .login-section {
+            text-align: center;
+            padding: 40px 20px;
+        }
 
-    const tokenData = await tokenResponse.json();
+        .discord-login-btn {
+            background: #5865F2;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
 
-    if (!tokenData.access_token) {
-      console.log('❌ No access token received:', tokenData);
-      return res.redirect('/?error=no_token');
-    }
+        .discord-login-btn:hover {
+            background: #4752C4;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
+        }
 
-    // Get user data
-    const userResponse = await fetch('https://discord.com/api/users/@me', {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`
-      }
-    });
+        .discord-icon {
+            width: 24px;
+            height: 24px;
+        }
 
-    const userData = await userResponse.json();
-    console.log('✅ User authenticated:', userData.username);
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
 
-    // Save to session
-    req.session.user = {
-      id: userData.id,
-      username: userData.username,
-      discriminator: userData.discriminator || '0',
-      avatar: userData.avatar 
-        ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png` 
-        : 'https://cdn.discordapp.com/embed/avatars/0.png',
-      email: userData.email
-    };
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+        }
 
-    // Force save session before redirect
-    req.session.save((err) => {
-      if (err) {
-        console.error('❌ Session save error:', err);
-        return res.redirect('/?error=session_error');
-      }
-      console.log('💾 Session saved successfully');
-      res.redirect('/?login=success');
-    });
+        .user-details {
+            flex: 1;
+        }
 
-  } catch (error) {
-    console.error('❌ Auth error:', error);
-    res.redirect('/?error=auth_failed');
-  }
-});
+        .user-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
 
-// Check if user is logged in
-app.get('/api/auth/user', (req, res) => {
-  if (req.session && req.session.user) {
-    console.log('✅ User session found:', req.session.user.username);
-    res.json({ loggedIn: true, user: req.session.user });
-  } else {
-    console.log('❌ No user session');
-    res.json({ loggedIn: false });
-  }
-});
+        .user-tag {
+            color: #666;
+            font-size: 0.9em;
+        }
 
-// Logout
-app.get('/api/auth/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-    }
-    res.redirect('/');
-  });
-});
+        .logout-btn {
+            background: #ed4245;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
 
-// Submit Order
-app.post('/api/order', async (req, res) => {
-  if (!req.session || !req.session.user) {
-    console.log('❌ Order attempt without login');
-    return res.status(401).json({ error: 'Nicht eingeloggt' });
-  }
+        .logout-btn:hover {
+            background: #c53639;
+        }
 
-  const { botFeatures, botLogo, additionalMessage } = req.body;
+        .form-group {
+            margin-bottom: 25px;
+        }
 
-  if (!botFeatures || !botFeatures.trim()) {
-    return res.status(400).json({ error: 'Bot-Features sind erforderlich' });
-  }
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
 
-  const user = req.session.user;
-  const orderData = {
-    discordUsername: `${user.username}#${user.discriminator}`,
-    discordId: user.id,
-    email: user.email || 'Keine Email angegeben',
-    botFeatures: botFeatures,
-    additionalMessage: additionalMessage || 'Keine zusätzliche Nachricht',
-    hasLogo: !!botLogo,
-    timestamp: new Date().toISOString()
-  };
+        .optional {
+            color: #999;
+            font-weight: 400;
+            font-size: 0.85em;
+        }
 
-  try {
-    const attachments = [];
-    
-    // Handle logo if provided
-    if (botLogo) {
-      try {
-        const base64Data = botLogo.split(',')[1];
-        const mimeType = botLogo.split(';')[0].split(':')[1];
-        const extension = mimeType.split('/')[1];
-        
-        attachments.push({
-          filename: `bot-logo.${extension}`,
-          content: base64Data,
-          encoding: 'base64'
+        textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #5865F2;
+            box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1);
+        }
+
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-upload-input {
+            display: none;
+        }
+
+        .file-upload-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border: 2px dashed #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: #666;
+        }
+
+        .file-upload-label:hover {
+            border-color: #5865F2;
+            background: #f0f2ff;
+        }
+
+        .file-upload-label.has-file {
+            border-color: #4CAF50;
+            background: #f1f8f4;
+            color: #4CAF50;
+        }
+
+        .image-preview {
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+        }
+
+        .image-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #5865F2, #7289DA);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .success-message {
+            display: none;
+            background: #4CAF50;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 1.1em;
+        }
+
+        .error-message {
+            display: none;
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Discord Bots</h1>
+            <p>Bestelle deinen individuellen Bot</p>
+            <div class="price-tag">15€ oder weniger</div>
+            <div class="payment-info">
+                <p>💳 Zahlung per PayPal oder Überweisung</p>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div id="loginSection" class="login-section">
+            <h2 style="margin-bottom: 20px; color: #333;">Mit Discord anmelden</h2>
+            <a href="/api/auth/login" class="discord-login-btn">
+                <svg class="discord-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
+                </svg>
+                Mit Discord anmelden
+            </a>
+        </div>
+
+        <div id="orderSection" class="hidden">
+            <div class="user-info">
+                <img id="userAvatar" class="user-avatar" src="" alt="Avatar">
+                <div class="user-details">
+                    <div class="user-name" id="userName"></div>
+                    <div class="user-tag" id="userTag"></div>
+                </div>
+                <a href="/api/auth/logout" class="logout-btn">Abmelden</a>
+            </div>
+
+            <h2 style="color: #333; margin-bottom: 20px;">📋 Kontaktformular</h2>
+
+            <form id="botForm">
+                <div class="form-group">
+                    <label for="botFeatures">Was soll der Bot alles können? <span class="required">*</span></label>
+                    <textarea id="botFeatures" placeholder="Beschreibe die gewünschten Funktionen...
+
+Beispiele:
+- Moderation (kick, ban, mute, warn)
+- Musik abspielen (YouTube, Spotify)
+- Levelsystem mit Rangrollen
+- Ticket-System
+- Willkommensnachrichten
+- etc." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="botLogo">
+                        Welches Logo soll der Bot haben? <span class="optional">(Optional)</span>
+                    </label>
+                    <div class="file-upload">
+                        <input type="file" id="botLogo" class="file-upload-input" accept="image/*">
+                        <label for="botLogo" class="file-upload-label" id="fileLabel">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            <span id="fileName">Bild hochladen (JPG, PNG, GIF)</span>
+                        </label>
+                    </div>
+                    <div class="image-preview" id="imagePreview">
+                        <img id="previewImg" src="" alt="Vorschau">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="additionalMessage">Sonstige Nachricht <span class="optional">(Optional)</span></label>
+                    <textarea id="additionalMessage" placeholder="Weitere Wünsche, Fragen oder Anmerkungen..." style="min-height: 80px;"></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    Absenden
+                </button>
+            </form>
+
+            <div class="success-message" id="successMessage">
+                ✅ Bestellung erfolgreich versendet!<br>
+                Du wirst bald kontaktiert.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        // File upload handler
+        document.getElementById('botLogo').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const label = document.getElementById('fileLabel');
+                const fileName = document.getElementById('fileName');
+                
+                label.classList.add('has-file');
+                fileName.textContent = '✓ ' + file.name;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
         });
-      } catch (err) {
-        console.error('Logo processing error:', err);
-      }
-    }
 
-    // Send email
-    const mailOptions = {
-      from: CONFIG.EMAIL_USER,
-      to: CONFIG.EMAIL_TO,
-      subject: `🤖 Neue Bot-Bestellung von ${orderData.discordUsername}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              line-height: 1.6; 
-              color: #333; 
-              max-width: 700px;
-              margin: 0 auto;
-              padding: 20px;
+        // Check authentication status
+        async function checkAuth() {
+            console.log('🔍 Checking authentication...');
+            try {
+                const response = await fetch('/api/auth/user', {
+                    credentials: 'include',
+                    cache: 'no-cache'
+                });
+                
+                const data = await response.json();
+                console.log('Auth response:', data);
+                
+                if (data.loggedIn && data.user) {
+                    console.log('✅ User is logged in:', data.user.username);
+                    showOrderForm(data.user);
+                } else {
+                    console.log('❌ User not logged in');
+                    showLoginForm();
+                }
+            } catch (error) {
+                console.error('❌ Auth check failed:', error);
+                showLoginForm();
             }
-            .header { 
-              background: linear-gradient(135deg, #5865F2, #7289DA); 
-              color: white; 
-              padding: 30px; 
-              text-align: center; 
-              border-radius: 10px;
-              margin-bottom: 20px;
-            }
-            .content { 
-              background: #f9f9f9; 
-              padding: 30px; 
-              border-radius: 10px; 
-            }
-            .info-box { 
-              background: white; 
-              padding: 15px; 
-              margin: 10px 0; 
-              border-left: 4px solid #5865F2; 
-              border-radius: 5px; 
-            }
-            .features-box { 
-              background: white; 
-              padding: 20px; 
-              margin: 15px 0; 
-              border-radius: 5px; 
-              border: 2px solid #5865F2;
-            }
-            .features-box h3 {
-              color: #5865F2;
-              margin-top: 0;
-            }
-            .features-content {
-              white-space: pre-wrap;
-              font-family: 'Courier New', monospace;
-              background: #f5f5f5;
-              padding: 15px;
-              border-radius: 5px;
-              margin-top: 10px;
-            }
-            .price { 
-              background: #4CAF50; 
-              color: white; 
-              padding: 15px; 
-              text-align: center; 
-              font-size: 1.3em; 
-              font-weight: bold; 
-              border-radius: 5px; 
-              margin: 20px 0; 
-            }
-            .logo-info {
-              background: #fff3cd;
-              border-left: 4px solid #ffc107;
-              padding: 15px;
-              margin: 15px 0;
-              border-radius: 5px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>🤖 Neue Bot-Bestellung!</h1>
-            <p>Ein Kunde möchte einen Discord Bot bestellen</p>
-          </div>
-          
-          <div class="content">
-            <h2 style="color: #5865F2;">👤 Kundendaten</h2>
+        }
+
+        // Show order form
+        function showOrderForm(user) {
+            console.log('📝 Showing order form');
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('orderSection').classList.remove('hidden');
+            document.getElementById('userAvatar').src = user.avatar;
+            document.getElementById('userName').textContent = user.username;
+            document.getElementById('userTag').textContent = '#' + user.discriminator;
+        }
+
+        // Show login form
+        function showLoginForm() {
+            console.log('🔐 Showing login form');
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('orderSection').classList.add('hidden');
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => errorDiv.style.display = 'none', 5000);
+        }
+
+        // Form submission
+        document.getElementById('botForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            <div class="info-box">
-              <strong>Discord:</strong> ${orderData.discordUsername}
-            </div>
-            
-            <div class="info-box">
-              <strong>Discord ID:</strong> ${orderData.discordId}
-            </div>
-            
-            <div class="info-box">
-              <strong>Email:</strong> ${orderData.email}
-            </div>
-            
-            <div class="info-box">
-              <strong>Zeitpunkt:</strong> ${new Date(orderData.timestamp).toLocaleString('de-DE', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </div>
+            const botFeatures = document.getElementById('botFeatures').value;
+            if (!botFeatures.trim()) {
+                showError('Bitte beschreibe was der Bot können soll!');
+                return;
+            }
 
-            <div class="features-box">
-              <h3>📋 Was soll der Bot können?</h3>
-              <div class="features-content">${orderData.botFeatures}</div>
-            </div>
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading"></span> Sende...';
 
-            ${orderData.additionalMessage !== 'Keine zusätzliche Nachricht' ? `
-            <div class="features-box">
-              <h3>💬 Sonstige Nachricht</h3>
-              <div class="features-content">${orderData.additionalMessage}</div>
-            </div>
-            ` : ''}
+            try {
+                let logoBase64 = null;
+                if (selectedFile) {
+                    logoBase64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(selectedFile);
+                    });
+                }
 
-            ${orderData.hasLogo ? `
-            <div class="logo-info">
-              <strong>🎨 Bot-Logo:</strong> Siehe Anhang dieser Email
-            </div>
-            ` : `
-            <div class="info-box">
-              <strong>🎨 Bot-Logo:</strong> Kein Logo hochgeladen
-            </div>
-            `}
-            
-            <div class="price">💰 Preis: 15€ oder weniger</div>
-            <div style="text-align: center; color: #666; margin-top: 10px;">
-              💳 Zahlung per PayPal oder Überweisung
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      attachments: attachments
-    };
+                const response = await fetch('/api/order', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        botFeatures: botFeatures,
+                        botLogo: logoBase64,
+                        additionalMessage: document.getElementById('additionalMessage').value
+                    })
+                });
 
-    await transporter.sendMail(mailOptions);
-    
-    console.log('✅ Order email sent for:', orderData.discordUsername);
-    
-    res.json({ 
-      success: true, 
-      message: 'Bestellung erfolgreich versendet!' 
-    });
+                const data = await response.json();
 
-  } catch (error) {
-    console.error('❌ Order submission error:', error);
-    res.status(500).json({ 
-      error: 'Fehler beim Versenden der Bestellung' 
-    });
-  }
-});
+                if (response.ok) {
+                    document.getElementById('botForm').style.display = 'none';
+                    document.getElementById('successMessage').style.display = 'block';
+                    
+                    setTimeout(() => {
+                        document.getElementById('botForm').reset();
+                        document.getElementById('botForm').style.display = 'block';
+                        document.getElementById('successMessage').style.display = 'none';
+                        document.getElementById('imagePreview').style.display = 'none';
+                        document.getElementById('fileLabel').classList.remove('has-file');
+                        document.getElementById('fileName').textContent = 'Bild hochladen (JPG, PNG, GIF)';
+                        selectedFile = null;
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                    }, 5000);
+                } else {
+                    showError(data.error || 'Fehler aufgetreten');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            } catch (error) {
+                console.error('Submit error:', error);
+                showError('Verbindung fehlgeschlagen');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            }
+        });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Export for Vercel
-module.exports = app;
-
-// Local development
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-  });
-}
+        // Handle URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        if (urlParams.get('error')) {
+            showError('Login fehlgeschlagen - bitte versuche es erneut');
+        }
+        
+        if (urlParams.get('login') === 'success') {
+            console.log('🎉 Login success parameter detected');
+            setTimeout(() => {
+                checkAuth();
+            }, 300);
+        }
+        
+        // Initial authentication check
+        checkAuth();
+    </script>
+</body>
+</html>
