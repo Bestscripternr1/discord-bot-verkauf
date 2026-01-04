@@ -44,71 +44,6 @@ app.get('/api/auth/login', (req, res) => {
 app.get('/api/auth/callback', async (req, res) => {
   const code = req.query.code;
   
-  console.log('📥 Callback received, code:', code ? 'YES' : 'NO');
-  
-  if (!code) {
-    console.log('❌ No code received');
-    return res.redirect('/?error=no_code');
-  }
-
-  try {
-    console.log('🔄 Fetching token from Discord...');
-    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        client_id: process.env.DISCORD_CLIENT_ID,
-        client_secret: process.env.DISCORD_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: process.env.DISCORD_REDIRECT_URI
-      })
-    });
-
-    const tokenData = await tokenResponse.json();
-    console.log('🎫 Token response:', tokenData.access_token ? 'SUCCESS' : 'FAILED');
-
-    if (!tokenData.access_token) {
-      console.log('❌ No access token:', tokenData);
-      return res.redirect('/?error=no_token');
-    }
-
-    console.log('👤 Fetching user data...');
-    const userResponse = await fetch('https://discord.com/api/users/@me', {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`
-      }
-    });
-
-    const userData = await userResponse.json();
-    console.log('✅ User data received:', userData.username);
-
-    req.session.user = {
-      id: userData.id,
-      username: userData.username,
-      discriminator: userData.discriminator || '0',
-      avatar: userData.avatar ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png',
-      email: userData.email
-    };
-
-    console.log('💾 Session saved:', req.session.user.username);
-    
-    req.session.save((err) => {
-      if (err) {
-        console.log('❌ Session save error:', err);
-      }
-      console.log('🔄 Redirecting to homepage...');
-      res.redirect('/?login=success');
-    });
-
-  } catch (error) {
-    console.error('❌ Auth Error:', error);
-    res.redirect('/?error=auth_failed');
-  }
-});
-  
   if (!code) {
     return res.redirect('/?error=no_code');
   }
@@ -150,7 +85,12 @@ app.get('/api/auth/callback', async (req, res) => {
       email: userData.email
     };
 
-    res.redirect('/?login=success');
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      }
+      res.redirect('/?login=success');
+    });
 
   } catch (error) {
     console.error('Auth Error:', error);
@@ -159,7 +99,7 @@ app.get('/api/auth/callback', async (req, res) => {
 });
 
 app.get('/api/auth/user', (req, res) => {
-  if (req.session.user) {
+  if (req.session && req.session.user) {
     res.json({ loggedIn: true, user: req.session.user });
   } else {
     res.json({ loggedIn: false });
@@ -172,7 +112,7 @@ app.get('/api/auth/logout', (req, res) => {
 });
 
 app.post('/api/order', async (req, res) => {
-  if (!req.session.user) {
+  if (!req.session || !req.session.user) {
     return res.status(401).json({ error: 'Nicht eingeloggt' });
   }
 
@@ -216,81 +156,15 @@ app.post('/api/order', async (req, res) => {
         <html>
         <head>
           <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              line-height: 1.6; 
-              color: #333; 
-              max-width: 700px;
-              margin: 0 auto;
-              padding: 20px;
-            }
-            .header { 
-              background: linear-gradient(135deg, #5865F2, #7289DA); 
-              color: white; 
-              padding: 30px; 
-              text-align: center; 
-              border-radius: 10px;
-              margin-bottom: 20px;
-            }
-            .content { 
-              background: #f9f9f9; 
-              padding: 30px; 
-              border-radius: 10px; 
-            }
-            .info-box { 
-              background: white; 
-              padding: 15px; 
-              margin: 10px 0; 
-              border-left: 4px solid #5865F2; 
-              border-radius: 5px; 
-            }
-            .info-box strong {
-              display: inline-block;
-              min-width: 120px;
-            }
-            .features-box { 
-              background: white; 
-              padding: 20px; 
-              margin: 15px 0; 
-              border-radius: 5px; 
-              border: 2px solid #5865F2;
-            }
-            .features-box h3 {
-              color: #5865F2;
-              margin-top: 0;
-            }
-            .features-content {
-              white-space: pre-wrap;
-              font-family: 'Courier New', monospace;
-              background: #f5f5f5;
-              padding: 15px;
-              border-radius: 5px;
-              margin-top: 10px;
-            }
-            .price { 
-              background: #4CAF50; 
-              color: white; 
-              padding: 15px; 
-              text-align: center; 
-              font-size: 1.3em; 
-              font-weight: bold; 
-              border-radius: 5px; 
-              margin: 20px 0; 
-            }
-            .logo-info {
-              background: #fff3cd;
-              border-left: 4px solid #ffc107;
-              padding: 15px;
-              margin: 15px 0;
-              border-radius: 5px;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 2px solid #e0e0e0;
-              color: #666;
-            }
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #5865F2, #7289DA); color: white; padding: 30px; text-align: center; border-radius: 10px; margin-bottom: 20px; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 10px; }
+            .info-box { background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #5865F2; border-radius: 5px; }
+            .features-box { background: white; padding: 20px; margin: 15px 0; border-radius: 5px; border: 2px solid #5865F2; }
+            .features-box h3 { color: #5865F2; margin-top: 0; }
+            .features-content { white-space: pre-wrap; font-family: 'Courier New', monospace; background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 10px; }
+            .price { background: #4CAF50; color: white; padding: 15px; text-align: center; font-size: 1.3em; font-weight: bold; border-radius: 5px; margin: 20px 0; }
+            .logo-info { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 5px; }
           </style>
         </head>
         <body>
@@ -302,28 +176,10 @@ app.post('/api/order', async (req, res) => {
           <div class="content">
             <h2 style="color: #5865F2;">👤 Kundendaten</h2>
             
-            <div class="info-box">
-              <strong>Discord:</strong> ${orderData.discordUsername}
-            </div>
-            
-            <div class="info-box">
-              <strong>Discord ID:</strong> ${orderData.discordId}
-            </div>
-            
-            <div class="info-box">
-              <strong>Email:</strong> ${orderData.email}
-            </div>
-            
-            <div class="info-box">
-              <strong>Zeitpunkt:</strong> ${new Date(orderData.timestamp).toLocaleString('de-DE', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </div>
+            <div class="info-box"><strong>Discord:</strong> ${orderData.discordUsername}</div>
+            <div class="info-box"><strong>Discord ID:</strong> ${orderData.discordId}</div>
+            <div class="info-box"><strong>Email:</strong> ${orderData.email}</div>
+            <div class="info-box"><strong>Zeitpunkt:</strong> ${new Date(orderData.timestamp).toLocaleString('de-DE')}</div>
 
             <div class="features-box">
               <h3>📋 Was soll der Bot können?</h3>
@@ -338,21 +194,13 @@ app.post('/api/order', async (req, res) => {
             ` : ''}
 
             ${orderData.hasLogo ? `
-            <div class="logo-info">
-              <strong>🎨 Bot-Logo:</strong> Im Anhang dieser Email!
-            </div>
+            <div class="logo-info"><strong>🎨 Bot-Logo:</strong> Im Anhang dieser Email!</div>
             ` : `
-            <div class="info-box">
-              <strong>🎨 Bot-Logo:</strong> Kein Logo hochgeladen
-            </div>
+            <div class="info-box"><strong>🎨 Bot-Logo:</strong> Kein Logo hochgeladen</div>
             `}
             
-            <div class="price">💰 Preis: 15€</div>
-          </div>
-
-          <div class="footer">
-            <p><strong>Discord Bot Verkauf</strong></p>
-            <p style="font-size: 0.9em; color: #999;">Automatisch generierte Bestellung</p>
+            <div class="price">💰 Preis: 15€ oder weniger</div>
+            <div style="text-align: center; color: #666; margin-top: 10px;">Zahlung per PayPal oder Überweisung</div>
           </div>
         </body>
         </html>
@@ -363,26 +211,13 @@ app.post('/api/order', async (req, res) => {
     await transporter.sendMail(mailOptions);
     
     console.log('✅ Bestellung von:', orderData.discordUsername);
-    console.log('📧 Email gesendet mit', orderData.hasLogo ? 'Logo' : 'ohne Logo');
     
-    res.json({ 
-      success: true, 
-      message: 'Bestellung erfolgreich!' 
-    });
+    res.json({ success: true, message: 'Bestellung erfolgreich!' });
 
   } catch (error) {
     console.error('❌ Email Error:', error);
-    res.status(500).json({ 
-      error: 'Fehler beim Senden' 
-    });
+    res.status(500).json({ error: 'Fehler beim Senden' });
   }
 });
 
 module.exports = app;
-
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Server läuft auf Port ${PORT}`);
-  });
-}
