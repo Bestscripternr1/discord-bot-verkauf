@@ -1,6 +1,6 @@
 {
   "name": "discord-bot-verkauf",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "api/server.js",
   "scripts": {
     "start": "node api/server.js"
