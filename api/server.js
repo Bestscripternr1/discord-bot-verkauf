@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
@@ -8,19 +9,26 @@ const app = express();
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 app.use(cors({
   origin: true,
   credentials: true
 }));
 
-// Session Configuration
+// Memory store für Sessions
+const MemoryStore = require('express-session').MemoryStore;
+const sessionStore = new MemoryStore();
+
+// Session Configuration mit Cookie Fallback
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'super-geheim-2025',
-  resave: false,
+  resave: true,
   saveUninitialized: true,
+  rolling: true,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
+    secure: false, // Set to false for better compatibility
+    httpOnly: false,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
   }
@@ -96,7 +104,7 @@ app.get('/api/auth/callback', async (req, res) => {
     console.log('✅ User authenticated:', userData.username);
 
     // Save to session
-    req.session.user = {
+    const userObject = {
       id: userData.id,
       username: userData.username,
       discriminator: userData.discriminator || '0',
@@ -106,13 +114,25 @@ app.get('/api/auth/callback', async (req, res) => {
       email: userData.email
     };
 
-    // Force save session before redirect
+    req.session.user = userObject;
+
+    // Force save session and set cookie backup
     req.session.save((err) => {
       if (err) {
         console.error('❌ Session save error:', err);
-        return res.redirect('/?error=session_error');
+      } else {
+        console.log('💾 Session saved successfully');
       }
-      console.log('💾 Session saved successfully');
+      
+      // Set backup cookie with user data
+      res.cookie('discord_user', JSON.stringify(userObject), {
+        maxAge: 24 * 60 * 60 * 1000,
+        httpOnly: false,
+        secure: false,
+        sameSite: 'lax'
+      });
+      
+      console.log('🍪 Cookie set for user:', userData.username);
       res.redirect('/?login=success');
     });
 
@@ -124,13 +144,27 @@ app.get('/api/auth/callback', async (req, res) => {
 
 // Check if user is logged in
 app.get('/api/auth/user', (req, res) => {
+  // Try session first
   if (req.session && req.session.user) {
     console.log('✅ User session found:', req.session.user.username);
-    res.json({ loggedIn: true, user: req.session.user });
-  } else {
-    console.log('❌ No user session');
-    res.json({ loggedIn: false });
+    return res.json({ loggedIn: true, user: req.session.user });
   }
+  
+  // Fallback to cookie
+  if (req.cookies && req.cookies.discord_user) {
+    try {
+      const user = JSON.parse(req.cookies.discord_user);
+      console.log('✅ User from cookie:', user.username);
+      // Restore to session
+      req.session.user = user;
+      return res.json({ loggedIn: true, user: user });
+    } catch (e) {
+      console.error('❌ Cookie parse error:', e);
+    }
+  }
+  
+  console.log('❌ No user session or cookie');
+  res.json({ loggedIn: false });
 });
 
 // Logout
@@ -139,13 +173,27 @@ app.get('/api/auth/logout', (req, res) => {
     if (err) {
       console.error('Logout error:', err);
     }
-    res.redirect('/');
   });
+  res.clearCookie('discord_user');
+  res.redirect('/');
 });
 
 // Submit Order
 app.post('/api/order', async (req, res) => {
-  if (!req.session || !req.session.user) {
+  // Check session or cookie
+  let user = null;
+  
+  if (req.session && req.session.user) {
+    user = req.session.user;
+  } else if (req.cookies && req.cookies.discord_user) {
+    try {
+      user = JSON.parse(req.cookies.discord_user);
+    } catch (e) {
+      console.error('Cookie parse error:', e);
+    }
+  }
+  
+  if (!user) {
     console.log('❌ Order attempt without login');
     return res.status(401).json({ error: 'Nicht eingeloggt' });
   }
@@ -156,7 +204,6 @@ app.post('/api/order', async (req, res) => {
     return res.status(400).json({ error: 'Bot-Features sind erforderlich' });
   }
 
-  const user = req.session.user;
   const orderData = {
     discordUsername: `${user.username}#${user.discriminator}`,
     discordId: user.id,
